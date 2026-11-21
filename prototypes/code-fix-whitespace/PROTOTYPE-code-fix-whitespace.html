@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE: Remove comment whitespace</title>
+<style>
+  :root { --accent:#2f6fdb; --bg:#fbfbfa; --fg:#1d1d1f; --muted:#6b6b70; --line:#e2e2e0; --del:#fde2e1; --delfg:#b42318; --cm:#e8f0fd; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; color:var(--fg); background:var(--bg); }
+  main { max-width:1100px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:15px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:28px 0 8px; }
+  .banner { background:#fff6d6; border:1px solid #f0dc8c; padding:8px 12px; border-radius:6px; font-size:13px; margin-bottom:14px; }
+  .question { color:var(--muted); max-width:820px; }
+  .panes { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:800px){ .panes { grid-template-columns:1fr; } }
+  .pane { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 12px; min-width:0; }
+  .pane h3 { margin:0 0 6px; font-size:13px; color:var(--muted); font-weight:600; }
+  pre { margin:0; font:13px/1.55 ui-monospace, Consolas, monospace; white-space:pre-wrap; word-break:break-all; }
+  .ws { color:#c9c9c9; } .nl { color:#c9c9c9; }
+  del { background:var(--del); color:var(--delfg); text-decoration:line-through; }
+  del .ws, del .nl { color:var(--delfg); }
+  .cm { background:var(--cm); border-radius:2px; }
+  .ins { background:#dff5e3; outline:1px solid #6cc07b; }
+  button { font:inherit; font-size:13px; padding:6px 10px; border-radius:6px; border:1px solid var(--line); background:#fff; cursor:pointer; margin:0 6px 6px 0; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.done { opacity:.45; }
+  button.next { outline:2px solid var(--accent); }
+  .row { display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; }
+  .facts { display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; font-size:14px; margin-top:10px; }
+  .facts dt { color:var(--muted); } .facts dd { margin:0; }
+  .ok { color:#1a7f37; font-weight:600; } .bad { color:var(--delfg); font-weight:600; }
+  .tabs { display:flex; flex-wrap:wrap; gap:4px; border-bottom:1px solid var(--line); margin-bottom:10px; }
+  .tab { border:none; border-bottom:2px solid transparent; border-radius:0; margin:0; background:none; }
+  .tab.active { border-bottom-color:var(--accent); color:var(--accent); }
+  textarea { width:100%; min-height:140px; font:13px/1.5 ui-monospace, Consolas, monospace; border:1px solid var(--line); border-radius:6px; padding:8px; }
+  .desc { max-width:820px; }
+  .rules li { margin-bottom:4px; }
+  label { font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="banner">PROTOTYPE: throwaway demo for the ticket <b>Code fix whitespace behaviour</b>. Not production code.</div>
+  <h1>What does "Remove comment" delete?</h1>
+  <p class="question">When the <b>Remove comment</b> code fix deletes a comment, it also has to decide what happens to the spaces, indentation and line breaks around it. This demo lets you remove comments one at a time (a single fix) or all at once (<b>Fix All</b>), and shows exactly which characters go. Spaces show as <span class="ws">·</span> and line breaks as <span class="nl">↵</span>. The question: do these rules give the result you'd expect in every layout, and does Fix All always give the same result as removing comments one by one?</p>
+
+  <h2>Proposed rules</h2>
+  <ol class="rules desc">
+    <li><b>Own line</b>: if removing the comment leaves its line(s) empty, the whole line goes, line break included.</li>
+    <li><b>Before code</b> (only spaces to its left): the comment and the spaces to its <i>right</i> go, so the code keeps the comment's indentation.</li>
+    <li><b>After code</b> or <b>between code</b>: the comment and the spaces to its <i>left</i> go (to its right if there are none on the left). If that would glue two words together (<code>return/*x*/value</code>), one space is kept.</li>
+    <li>Other lines are never touched, unless <b>Tidy blank lines</b> is on: then a removed block that sat between two blank lines (or at the top of the file) also takes one blank line with it.</li>
+    <li><b>Fix All</b> works out every deletion against the original text and merges them, using the same rules, as if each comment were already gone when classifying the others.</li>
+  </ol>
+
+  <h2>Current state</h2>
+  <div class="row">
+    <label><input type="checkbox" id="optCollapse"> Tidy blank lines</label>
+    <span style="color:var(--muted);font-size:13px">&nbsp;Language: <b id="langLabel"></b></span>
+  </div>
+  <dl class="facts">
+    <dt>Last action</dt><dd id="lastAction">—</dd>
+    <dt>Comments left</dt><dd id="commentCount">—</dd>
+    <dt>Fix All = one by one?</dt><dd id="consistency">—</dd>
+  </dl>
+  <div class="panes" style="margin-top:12px">
+    <div class="pane"><h3>Before the last action (deleted text struck through)</h3><pre id="beforeView"></pre></div>
+    <div class="pane"><h3>Now (comments shaded)</h3><pre id="nowView"></pre></div>
+  </div>
+
+  <h2>Free play</h2>
+  <div class="row" id="commentButtons"></div>
+  <div class="row">
+    <button class="primary" id="btnFixAll">Fix All</button>
+    <button id="btnUndo">Undo</button>
+    <button id="btnReset">Start over</button>
+  </div>
+  <details style="margin-top:8px">
+    <summary>Try your own code</summary>
+    <textarea id="customSrc"></textarea>
+    <div class="row" style="margin-top:6px">
+      <select id="customLang"><option value="cs">C# file</option><option value="razor">Razor file</option></select>
+      <button id="btnLoad">Load this code</button>
+    </div>
+  </details>
+
+  <h2>Guided walkthroughs</h2>
+  <div class="tabs" id="tabs"></div>
+  <div id="scenario"></div>
+</main>
+
+<script>
+/* ===== Portable logic: pure, no DOM. Lift into the real code fix. ===== */
+const NoCommentFix = (() => {
+  const isWord = c => c !== undefined && /[A-Za-z0-9_]/.test(c);
+  const isHws = c => c === ' ' || c === '\t';
+  const lineEndOf = (t, i) => { const n = t.indexOf('\n', i); return n < 0 ? t.length : n; };
+  const lineStartOf = (t, i) => t.lastIndexOf('\n', i - 1) + 1;
+  const blank = s => s.trim() === '';
+
+  function skipString(t, i, q) { while (i < t.length && t[i] !== q && t[i] !== '\n') { if (t[i] === '\\') i++; i++; } return i + 1; }
+  function skipVerbatim(t, i) { while (i < t.length) { if (t[i] === '"') { if (t[i + 1] === '"') { i += 2; continue; } return i + 1; } i++; } return i; }
+
+  function scanCSharp(t, from, to, out) {
+    let i = from;
+    while (i < to) {
+      const c = t[i], n = t[i + 1];
+      if (c === '#' && blank(t.slice(lineStartOf(t, i), i)) && /^#\s*(end)?region\b/.test(t.slice(i, i + 20))) { i = lineEndOf(t, i); continue; }
+      if (c === '/' && n === '/') {
+        const isDoc = t[i + 2] === '/' && t[i + 3] !== '/';
+        let end = lineEndOf(t, i);
+        if (isDoc) {
+          // consecutive /// lines form one documentation comment
+          for (;;) {
+            if (end >= to) break;
+            const ns = end + 1; let j = ns; while (isHws(t[j])) j++;
+            if (t.startsWith('///', j) && t[j + 3] !== '/') end = lineEndOf(t, j); else break;
+          }
+        }
+        out.push({ start: i, end, kind: isDoc ? 'documentation' : 'single-line' });
+        i = end; continue;
+      }
+      if (c === '/' && n === '*') {
+        let e = t.indexOf('*/', i + 2); e = e < 0 || e + 2 > to ? to : e + 2;
+        const isDoc = t[i + 2] === '*' && t[i + 3] !== '*' && t[i + 3] !== '/';
+        out.push({ start: i, end: e, kind: isDoc ? 'documentation' : 'multi-line' });
+        i = e; continue;
+      }
+      if (c === '@' && n === '"') { i = skipVerbatim(t, i + 2); continue; }
+      if (c === '"') { i = skipString(t, i + 1, '"'); continue; }
+      if (c === "'") { i = skipString(t, i + 1, "'"); continue; }
+      i++;
+    }
+  }
+
+  function scanRazor(t, out) {
+    let i = 0;
+    while (i < t.length) {
+      if (t.startsWith('@*', i)) {
+        let e = t.indexOf('*@', i + 2); e = e < 0 ? t.length : e + 2;
+        out.push({ start: i, end: e, kind: 'razor' }); i = e; continue;
+      }
+      const m = /^@(code|functions)?\s*\{/.exec(t.slice(i, i + 40));
+      if (m && (m[1] || t[i + 1] === '{')) {
+        const open = i + m[0].length - 1; let depth = 1, j = open + 1;
+        while (j < t.length && depth) { if (t[j] === '{') depth++; else if (t[j] === '}') depth--; j++; }
+        scanCSharp(t, open + 1, j - 1, out); i = j; continue;
+      }
+      i++;
+    }
+  }
+
+  function findComments(text, lang) {
+    const out = [];
+    if (lang === 'razor') scanRazor(text, out); else scanCSharp(text, 0, text.length, out);
+    return out.sort((a, b) => a.start - b.start);
+  }
+
+  function lineTable(t) {
+    const L = []; let s = 0;
+    for (;;) { const nl = t.indexOf('\n', s); if (nl < 0) { L.push({ start: s, end: t.length, next: t.length }); break; } L.push({ start: s, end: nl, next: nl + 1 }); s = nl + 1; }
+    if (L.length > 1 && L[L.length - 1].start === t.length) L.pop(); // no phantom line after final line break
+    return L;
+  }
+  const lineAt = (L, p) => { for (let i = 0; i < L.length; i++) if (p < L[i].next) return i; return L.length - 1; };
+
+  // Remove `targets` (a subset of `all`) from `text`. Single fix: targets = [one]. Fix All: targets = all.
+  function removeComments(text, targets, opts = {}) {
+    const L = lineTable(text);
+    const inTarget = p => targets.some(c => p >= c.start && p < c.end);
+    const residualBlank = (a, b) => { for (let p = a; p < b; p++) if (!/\s/.test(text[p]) && !inTarget(p)) return false; return true; };
+    const touches = (c, l) => c.start <= l.end && c.end > l.start;
+    const lineBlankOrig = i => blank(text.slice(L[i].start, L[i].end));
+
+    // 1. lines left empty once the targets are gone
+    const emptied = L.map((l, i) => targets.some(c => touches(c, l)) && residualBlank(l.start, l.end));
+    const spans = targets.map(c => ({ c, sl: lineAt(L, c.start), el: lineAt(L, Math.max(c.start, c.end - 1)) }));
+    for (const s of spans) { // a comment is removed by whole lines only if all its lines empty
+      let all = true; for (let i = s.sl; i <= s.el; i++) all = all && emptied[i];
+      s.wholeLines = all;
+      if (!all) for (let i = s.sl; i <= s.el; i++) emptied[i] = false;
+    }
+    const dels = []; const glue = [];
+    L.forEach((l, i) => { if (emptied[i]) dels.push([l.start, l.next]); });
+
+    // 2. comments that share their line with code
+    for (const s of spans) {
+      if (s.wholeLines) continue;
+      const c = s.c; let a = c.start, b = c.end;
+      const beforeBlank = residualBlank(L[s.sl].start, c.start);
+      const afterBlank = residualBlank(c.end, L[s.el].end);
+      if (beforeBlank) { while (isHws(text[b])) b++; }
+      else if (afterBlank) { while (a > L[s.sl].start && isHws(text[a - 1])) a--; while (isHws(text[b])) b++; }
+      else if (isHws(text[a - 1])) { while (a > L[s.sl].start && isHws(text[a - 1])) a--; }
+      else { while (isHws(text[b])) b++; }
+      dels.push([a, b]);
+      if (c.kind !== 'razor') glue.push([a, b]);
+    }
+
+    // 3. optional: tidy the blank lines a removed block leaves behind
+    if (opts.collapse) {
+      let i = 0;
+      while (i < L.length) {
+        if (!emptied[i]) { i++; continue; }
+        let j = i; while (j + 1 < L.length && emptied[j + 1]) j++;
+        const below = j + 1 < L.length && lineBlankOrig(j + 1);
+        if (i === 0) { let k = j + 1; while (k < L.length && lineBlankOrig(k)) { dels.push([L[k].start, L[k].next]); k++; } }
+        else if (lineBlankOrig(i - 1) && below) dels.push([L[j + 1].start, L[j + 1].next]);
+        else if (lineBlankOrig(i - 1) && j + 1 >= L.length) dels.push([L[i - 1].start, L[i - 1].next]);
+        i = j + 1;
+      }
+    }
+
+    // 4. merge overlapping deletions, keep words apart, apply
+    dels.sort((x, y) => x[0] - y[0]);
+    const merged = [];
+    for (const d of dels) { const m = merged[merged.length - 1]; if (m && d[0] <= m[1]) m[1] = Math.max(m[1], d[1]); else merged.push([...d]); }
+    const edits = merged.map(([a, b]) => {
+      const needsGlue = glue.some(([ga, gb]) => ga >= a && gb <= b) && isWord(text[a - 1]) && isWord(text[b]);
+      return { start: a, end: b, insert: needsGlue ? ' ' : '' };
+    });
+    let out = text;
+    for (const e of [...edits].reverse()) out = out.slice(0, e.start) + e.insert + out.slice(e.end);
+    return { text: out, edits };
+  }
+
+  function removeOneByOne(text, lang, opts) {
+    for (let n = 0; n < 500; n++) { const cs = findComments(text, lang); if (!cs.length) break; text = removeComments(text, [cs[0]], opts).text; }
+    return text;
+  }
+
+  return { findComments, removeComments, removeOneByOne };
+})();
+
+/* ===== Throwaway page shell ===== */
+const SCENARIOS = [
+  { title: 'Own line', lang: 'cs', desc: 'A comment alone on its line. Watch the whole line, line break included, disappear, so no blank line is left where it was.',
+    src: 'class Greeter\n{\n    // Say hello to the user\n    public void Greet() { }\n}\n',
+    steps: [['Remove "// Say hello"', { remove: '// Say hello' }]] },
+  { title: 'After code', lang: 'cs', desc: 'A comment at the end of a line of code. The comment and the space before it go; the code stays. The // inside the string is not a comment and is left alone.',
+    src: 'var total = price * quantity; // includes tax\nvar label = "a // not a comment";\n',
+    steps: [['Remove "// includes tax"', { remove: '// includes tax' }]] },
+  { title: 'Several lines in a row', lang: 'cs', desc: 'Three comment lines between blank lines. Removing them leaves two blank lines touching. Then try again with Tidy blank lines on, using Fix All, and check the two ways agree.',
+    src: 'var a = 1;\n\n// First line of an explanation\n// Second line\n// Third line\n\nvar b = 2;\n',
+    steps: [['Remove "// First"', { remove: '// First' }], ['Remove "// Second"', { remove: '// Second' }], ['Remove "// Third"', { remove: '// Third' }],
+            ['Start over', { reset: true }], ['Turn on Tidy blank lines', { collapse: true }], ['Fix All', { fixAll: true }]] },
+  { title: 'Multi-line comment', lang: 'cs', desc: 'A block comment over several lines on its own, then one that starts after code and ends before code. The second joins the two halves of the expression onto one line.',
+    src: '    /*\n     * Calculates the thing.\n     */\n    int Calc() => 42;\n\n    int Other(int x) => x /* doubled\n        below */ * 2;\n',
+    steps: [['Remove the first block', { remove: '/*\n' }], ['Remove "/* doubled"', { remove: '/* doubled' }]] },
+  { title: 'Between tokens', lang: 'cs', desc: 'Comments sitting inside a line of code. One space goes with each comment. In the last line there is no space either side, so a space is kept to stop "return" and "value" becoming one word.',
+    src: 'Call(/* first */ a, b /* second */, c);\nvar x = a /* why */ + b;\nreturn/* no spaces */value;\n',
+    steps: [['Remove "/* first */"', { remove: '/* first' }], ['Remove "/* second */"', { remove: '/* second' }], ['Remove "/* why */"', { remove: '/* why' }], ['Remove "/* no spaces */"', { remove: '/* no spaces' }]] },
+  { title: 'Documentation comments', lang: 'cs', desc: 'A /// block counts as one comment (one diagnostic) and goes as whole lines. The older /** */ style behaves like a block comment.',
+    src: '/// <summary>\n/// Adds two numbers.\n/// </summary>\n/// <param name="a">First.</param>\npublic int Add(int a, int b) => a + b;\n\n/** <summary>Old style.</summary> */\npublic int Sub(int a, int b) => a - b;\n',
+    steps: [['Remove the /// block', { remove: '/// <summary>' }], ['Remove the /** */ comment', { remove: '/**' }]] },
+  { title: 'Start and end of file', lang: 'cs', desc: 'A licence header at the top, a comment as the very last line with no line break after it. Without tidying, the file starts with a blank line. With Tidy blank lines, the top blank line goes too.',
+    src: '// Copyright (c) Example Ltd.\n// Licensed under MIT.\n\nnamespace Demo;\n\npublic class A { }\n\n// end of file',
+    steps: [['Fix All', { fixAll: true }], ['Start over', { reset: true }], ['Turn on Tidy blank lines', { collapse: true }], ['Fix All', { fixAll: true }]] },
+  { title: '#region and #if', lang: 'cs', desc: 'Text after #region is the region\'s name, not a comment, so it is not touched. A comment after #if is a real comment and goes like any trailing comment. Comments inside a region follow the usual rules.',
+    src: '#region Helpers // part of the region name\n    // helper comment\n    void Help() { }\n#endregion\n#if DEBUG // a real comment\n#endif\n',
+    steps: [['Fix All', { fixAll: true }]] },
+  { title: 'Empty block', lang: 'cs', desc: 'A block whose only content is a comment. The block is left empty; collapsing "{ }" is left to the formatter.',
+    src: 'void Later()\n{\n    // TODO: implement\n}\n\nvoid Inline() { /* nothing yet */ }\n',
+    steps: [['Remove "// TODO"', { remove: '// TODO' }], ['Remove "/* nothing yet */"', { remove: '/* nothing' }]] },
+  { title: 'Two comments on one line', lang: 'cs', desc: 'Two comments on the same line. Removing one at a time gives an in-between state; Fix All must land on the same final text. The consistency check above should stay green.',
+    src: 'var a = 1; /* one */ // two\n/* three */ /* four */ var b = 2;\n/* five */ // six\n',
+    steps: [['Remove "/* one */"', { remove: '/* one' }], ['Remove "// two"', { remove: '// two' }], ['Remove "/* three */"', { remove: '/* three' }], ['Start over', { reset: true }], ['Fix All', { fixAll: true }]] },
+  { title: 'Razor: @code block', lang: 'razor', desc: 'C# comments inside a Razor @code block follow exactly the C# rules.',
+    src: '<h1>Counter</h1>\n\n@code {\n    // current value\n    private int count; // starts at zero\n\n    private void Up() => count++; /* bump */\n}\n',
+    steps: [['Fix All', { fixAll: true }]] },
+  { title: 'Razor: comments in markup', lang: 'razor', desc: 'Razor @* *@ comments on their own line go as whole lines. Inside markup they take one space with them. Where there is no space either side, nothing is added: in markup an added space would change what the page shows.',
+    src: '@* Page header *@\n<h1>Hello</h1>\n<p>Total: @total @* not formatted yet *@ items</p>\n<p>Joined@* x *@text</p>\n@{\n    var total = 3; // three\n}\n',
+    steps: [['Remove "@* Page header *@"', { remove: '@* Page' }], ['Remove "@* not formatted"', { remove: '@* not' }], ['Remove "@* x *@"', { remove: '@* x' }], ['Remove "// three"', { remove: '// three' }]] },
+];
+
+let S = { lang: 'cs', original: '', text: '', history: [], last: null, collapse: false, scenario: 0, stepDone: 0 };
+
+function esc(c) { return c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '&' ? '&amp;' : c; }
+function vis(text, marks) {
+  let out = '', open = null;
+  const markAt = p => marks.find(m => p >= m.start && p < m.end);
+  for (let p = 0; p <= text.length; p++) {
+    for (const m of marks) if (m.insertAt === p) out += `<span class="ins" title="space kept to keep words apart">␣</span>`;
+    if (p === text.length) break;
+    const m = markAt(p); const tag = m ? m.tag : null;
+    if (tag !== open) { if (open) out += `</${open.split(' ')[0]}>`; if (tag) out += `<${tag}>`; open = tag; }
+    const c = text[p];
+    out += c === ' ' ? '<span class="ws">·</span>' : c === '\t' ? '<span class="ws">→</span>' : c === '\n' ? '<span class="nl">↵</span>\n' : esc(c);
+  }
+  if (open) out += `</${open.split(' ')[0]}>`;
+  return out || '<span style="color:#aaa">(empty file)</span>';
+}
+function preview(c, text) { const s = text.slice(c.start, c.end).split('\n')[0]; return s.length > 28 ? s.slice(0, 27) + '…' : s; }
+
+function load(src, lang) { S = { ...S, lang, original: src, text: src, history: [], last: null }; render(); }
+function apply(targets, label) {
+  const before = S.text;
+  const r = NoCommentFix.removeComments(S.text, targets, { collapse: S.collapse });
+  S.history.push(before); S.text = r.text; S.last = { before, edits: r.edits, label }; render();
+}
+function removeMatching(str) { const c = NoCommentFix.findComments(S.text, S.lang).find(c => S.text.slice(c.start, c.end).startsWith(str)); if (c) apply([c], `Removed ${preview(c, S.text)}`); }
+function fixAll() { const cs = NoCommentFix.findComments(S.text, S.lang); if (cs.length) apply(cs, `Fix All (${cs.length} comment${cs.length > 1 ? 's' : ''})`); }
+
+function render() {
+  document.getElementById('optCollapse').checked = S.collapse;
+  document.getElementById('langLabel').textContent = S.lang === 'razor' ? 'Razor file' : 'C# file';
+  const cs = NoCommentFix.findComments(S.text, S.lang);
+  document.getElementById('nowView').innerHTML = vis(S.text, cs.map(c => ({ start: c.start, end: c.end, tag: 'span class="cm"' })));
+  if (S.last) {
+    document.getElementById('beforeView').innerHTML = vis(S.last.before, S.last.edits.flatMap(e => [{ start: e.start, end: e.end, tag: 'del' }, ...(e.insert ? [{ insertAt: e.end, start: -1, end: -1 }] : [])]));
+    const n = S.last.edits.reduce((a, e) => a + e.end - e.start, 0);
+    document.getElementById('lastAction').textContent = `${S.last.label}: ${n} character${n === 1 ? '' : 's'} deleted${S.last.edits.some(e => e.insert) ? ', one space kept' : ''}`;
+  } else { document.getElementById('beforeView').innerHTML = '<span style="color:#aaa">Nothing removed yet.</span>'; document.getElementById('lastAction').textContent = '—'; }
+  document.getElementById('commentCount').textContent = cs.length ? cs.map(c => c.kind).join(', ') : 'none';
+  const base = S.history.length ? S.history[0] : S.text;
+  const all = NoCommentFix.findComments(base, S.lang);
+  const viaFixAll = NoCommentFix.removeComments(base, all, { collapse: S.collapse }).text;
+  const viaOne = NoCommentFix.removeOneByOne(base, S.lang, { collapse: S.collapse });
+  document.getElementById('consistency').innerHTML = viaFixAll === viaOne ? '<span class="ok">Yes</span> for this file (from where it started)' : '<span class="bad">No</span>: Fix All and one-by-one give different text for this file';
+  const box = document.getElementById('commentButtons');
+  box.innerHTML = cs.length ? '' : '<span style="color:var(--muted)">No comments left.</span>';
+  cs.forEach(c => { const b = document.createElement('button'); b.textContent = `Remove ${preview(c, S.text)}`; b.onclick = () => apply([c], `Removed ${preview(c, S.text)}`); box.appendChild(b); });
+  renderScenario();
+}
+
+function renderTabs() {
+  const tabs = document.getElementById('tabs'); tabs.innerHTML = '';
+  SCENARIOS.forEach((sc, i) => { const b = document.createElement('button'); b.className = 'tab' + (i === S.scenario ? ' active' : ''); b.textContent = sc.title; b.onclick = () => startScenario(i); tabs.appendChild(b); });
+}
+function startScenario(i) { S.scenario = i; S.stepDone = 0; S.collapse = false; const sc = SCENARIOS[i]; renderTabs(); load(sc.src, sc.lang); }
+function runStep(i) {
+  const act = SCENARIOS[S.scenario].steps[i][1];
+  if (act.remove) removeMatching(act.remove);
+  if (act.fixAll) fixAll();
+  if (act.reset) load(S.original, S.lang);
+  if (act.collapse) { S.collapse = true; render(); }
+  S.stepDone = i + 1; renderScenario();
+}
+function renderScenario() {
+  const sc = SCENARIOS[S.scenario]; const el = document.getElementById('scenario');
+  el.innerHTML = `<p class="desc">${sc.desc}</p><div class="row"></div>`;
+  const row = el.querySelector('.row');
+  sc.steps.forEach(([label], i) => { const b = document.createElement('button'); b.textContent = `${i + 1}. ${label}`; if (i < S.stepDone) b.className = 'done'; if (i === S.stepDone) b.className = 'next'; b.onclick = () => runStep(i); row.appendChild(b); });
+  const r = document.createElement('button'); r.textContent = 'Restart this walkthrough'; r.onclick = () => startScenario(S.scenario); row.appendChild(r);
+}
+
+document.getElementById('btnFixAll').onclick = fixAll;
+document.getElementById('btnUndo').onclick = () => { if (S.history.length) { S.text = S.history.pop(); S.last = null; render(); } };
+document.getElementById('btnReset').onclick = () => load(S.original, S.lang);
+document.getElementById('optCollapse').onchange = e => { S.collapse = e.target.checked; render(); };
+document.getElementById('btnLoad').onclick = () => { S.stepDone = 0; load(document.getElementById('customSrc').value.replace(/\r\n/g, '\n'), document.getElementById('customLang').value); };
+document.getElementById('customSrc').value = SCENARIOS[9].src;
+startScenario(0);
+</script>
+</body>
+</html>
