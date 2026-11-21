@@ -1,12 +1,15 @@
 # NoComments
 
-A Roslyn analyzer package that treats every comment in C# source as a violation, so intent has to be expressed in code.
+A Roslyn analyzer package that treats every comment in C# and Razor source as a violation, so intent has to be expressed in code.
 
 ## Language
 
 **Comment**:
-Comment trivia in C# source, in one of the three comment forms. Directives (`#region`, `#pragma`, `#nullable`), shebang lines and disabled `#if` text are not comments.
+A developer's note in C# or Razor source, in one of the comment forms. Directives (`#region`, `#pragma`, `#nullable`), shebang lines, disabled `#if` text and HTML comments (`<!-- -->`) are not comments.
 _Avoid_: Remark, annotation
+
+**Razor file**:
+A `.razor` or `.cshtml` file. Its C# (in `@code`, `@functions`, `@{ }` and `@( )`) is C# source; its markup is not.
 
 ### Comment forms
 
@@ -22,10 +25,14 @@ _Avoid_: Block comment, delimited comment
 A comment written as `///` or `/** */` that carries XML documentation.
 _Avoid_: XML comment, doc comment
 
+**Razor comment**:
+A comment delimited by `@*` and `*@` in a Razor file.
+_Avoid_: Razor block comment, at-star comment
+
 ### Scope
 
 **Generated code**:
-Source that Roslyn's generated-code detection classifies as generated. Comments in it are never reported.
+Source that Roslyn's generated-code detection classifies as generated. Comments in it are never reported, except comments a person wrote in a Razor file, which Roslyn only sees through the generated code.
 _Avoid_: Auto-generated code, designer code
 
 **Suppression**:
