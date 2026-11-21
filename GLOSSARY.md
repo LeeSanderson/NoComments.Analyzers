@@ -22,7 +22,7 @@ A comment delimited by `/*` and `*/` that is not a documentation comment.
 _Avoid_: Block comment, delimited comment
 
 **Documentation comment**:
-A comment written as `///` or `/** */` that carries XML documentation.
+A `///` or `/** */` comment in a project that generates documentation. Where documentation isn't generated, these are single-line and multi-line comments.
 _Avoid_: XML comment, doc comment
 
 **Razor comment**:
