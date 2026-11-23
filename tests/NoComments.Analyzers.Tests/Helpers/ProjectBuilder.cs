@@ -15,6 +15,13 @@ internal sealed class ProjectBuilder : IDisposable
 
     public string RootFolder => _directory.FullPath;
 
+    public static string ConsumerSdkVersion =>
+        Environment.GetEnvironmentVariable(ConsumerSdkVersionVariable) is { } version && !string.IsNullOrWhiteSpace(version)
+            ? version
+            : DefaultConsumerSdkVersion;
+
+    public static int ConsumerSdkMajorVersion => int.Parse(ConsumerSdkVersion.Split('.')[0], System.Globalization.CultureInfo.InvariantCulture);
+
     public ProjectBuilder(PackageFixture fixture, ITestOutputHelper testOutputHelper)
     {
         _testOutputHelper = testOutputHelper;
@@ -43,13 +50,12 @@ internal sealed class ProjectBuilder : IDisposable
              </configuration>
              """);
 
-        var sdkVersion = Environment.GetEnvironmentVariable(ConsumerSdkVersionVariable);
         _directory.CreateTextFile(
             "global.json",
             $$"""
               {
                 "sdk": {
-                  "version": "{{(string.IsNullOrWhiteSpace(sdkVersion) ? DefaultConsumerSdkVersion : sdkVersion)}}",
+                  "version": "{{ConsumerSdkVersion}}",
                   "rollForward": "latestFeature"
                 }
               }
