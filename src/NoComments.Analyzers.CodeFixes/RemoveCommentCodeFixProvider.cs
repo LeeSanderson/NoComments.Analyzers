@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Composition;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 
 namespace NoComments.Analyzers.CodeFixes;
@@ -10,8 +9,6 @@ namespace NoComments.Analyzers.CodeFixes;
 [Shared]
 public sealed class RemoveCommentCodeFixProvider : CodeFixProvider
 {
-    internal const string Title = "Remove comment";
-
     public override ImmutableArray<string> FixableDiagnosticIds { get; } =
         ImmutableArray.Create(Rules.SingleLineComment.Id, Rules.MultiLineComment.Id, Rules.DocumentationComment.Id);
 
@@ -22,12 +19,7 @@ public sealed class RemoveCommentCodeFixProvider : CodeFixProvider
         var solution = context.Document.Project.Solution;
         foreach (var diagnostic in context.Diagnostics)
         {
-            context.RegisterCodeFix(
-                CodeAction.Create(
-                    Title,
-                    cancellationToken => RemoveCommentFixAllProvider.RemoveAsync(solution, [diagnostic], cancellationToken),
-                    equivalenceKey: Title),
-                diagnostic);
+            context.RegisterCodeFix(RemoveCommentAction.Create(solution, [diagnostic]), diagnostic);
         }
 
         return Task.CompletedTask;

@@ -23,7 +23,7 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeAdditionalFile(AdditionalFileAnalysisContext context)
     {
         var path = context.AdditionalFile.Path;
-        if (!IsRazorPath(path))
+        if (!RazorFile.HasRazorExtension(path))
         {
             return;
         }
@@ -54,23 +54,11 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
             }
 
             var location = CommentLocation(context.Tree, trivia);
-            if (!context.IsGeneratedCode || IsWrittenInRazorFile(location))
+            if (!context.IsGeneratedCode || RazorFile.IsSourceOf(location))
             {
                 context.ReportDiagnostic(Diagnostic.Create(rule, location));
             }
         }
-    }
-
-    private static bool IsWrittenInRazorFile(Location location)
-    {
-        var mapped = location.GetMappedLineSpan();
-        return mapped.HasMappedPath && IsRazorPath(mapped.Path);
-    }
-
-    internal static bool IsRazorPath(string path)
-    {
-        return path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
-            || path.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase);
     }
 
     private static DiagnosticDescriptor? RuleFor(SyntaxTrivia trivia) =>
