@@ -97,6 +97,38 @@ public class RazorCommentShould(PackageFixture fixture, ITestOutputHelper testOu
     }
 
     [Fact]
+    public async Task FollowMarkupInsideControlBlocks()
+    {
+        using var project = await CreateRazorProjectBuilderAsync();
+        await project.AddFileAsync(
+            "Components/List.razor",
+            """
+            @if (DateTime.Now.Year > 2000)
+            {
+                <p>It's @* in if *@ here</p>
+            }
+            else
+            {
+                <p>Isn't "it"</p>
+            }
+            @foreach (var item in new[] { "a@*", "b" })
+            {
+                <span title="@item's">@item</span><br>
+            }
+            @* after *@
+
+            """);
+
+        var buildOutput = await project.BuildAndGetOutputAsync();
+
+        buildOutput.DiagnosticsIn("Components/List.razor").ShouldBe(
+        [
+            new ReportedDiagnostic("NOC0004", 3, 13, 3, 24),
+            new ReportedDiagnostic("NOC0004", 13, 1, 13, 12),
+        ]);
+    }
+
+    [Fact]
     public async Task NeverReportHtmlComments()
     {
         using var project = await CreateRazorProjectBuilderAsync();

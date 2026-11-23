@@ -157,6 +157,11 @@ internal sealed class RazorCommentScanner
                     return;
                 }
             }
+            else if (Current == '(')
+            {
+                _position++;
+                ScanCode(')', '(');
+            }
             else
             {
                 SkipCodeElementOrCharacter();
