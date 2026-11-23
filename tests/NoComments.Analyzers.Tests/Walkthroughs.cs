@@ -32,6 +32,23 @@ internal static class Walkthroughs
                 var label = "a // not a comment";
 
                 """),
+            ["03 Several lines in a row"] = (
+                """
+                var a = 1;
+
+                // First line of an explanation
+                // Second line
+                // Third line
+
+                var b = 2;
+
+                """,
+                """
+                var a = 1;
+
+                var b = 2;
+
+                """),
             ["04 Multi-line comment"] = (
                 """
                     /*
@@ -60,6 +77,23 @@ internal static class Walkthroughs
                 Call(a, b, c);
                 var x = a + b;
                 return value;
+
+                """),
+            ["07 Start and end of file"] = (
+                """
+                // Copyright (c) Example Ltd.
+                // Licensed under MIT.
+
+                namespace Demo;
+
+                public class A { }
+
+                // end of file
+                """,
+                """
+                namespace Demo;
+
+                public class A { }
 
                 """),
             ["09 Empty block"] = (

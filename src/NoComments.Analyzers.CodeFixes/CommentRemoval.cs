@@ -33,6 +33,8 @@ internal static class CommentRemoval
                 RemoveAlongsideCode(comment);
             }
 
+            TidyBlankLines(emptied);
+
             return Merge().Select(span => new TextChange(span, NeedsSpace(span) ? " " : string.Empty));
         }
 
@@ -94,6 +96,63 @@ internal static class CommentRemoval
             var deletion = TextSpan.FromBounds(start, end);
             _deletions.Add(deletion);
             _joins.Add(deletion);
+        }
+
+        private void TidyBlankLines(bool[] emptied)
+        {
+            var first = 0;
+            while (first < _lines.Length)
+            {
+                if (!emptied[first])
+                {
+                    first++;
+                    continue;
+                }
+
+                var last = first;
+                while (last + 1 < _lines.Length && emptied[last + 1])
+                {
+                    last++;
+                }
+
+                _deletions.AddRange(BlankLinesLeftBehind(first, last).Select(i => _lines[i].SpanIncludingLineBreak));
+                first = last + 1;
+            }
+        }
+
+        private IEnumerable<int> BlankLinesLeftBehind(int first, int last)
+        {
+            var below = last + 1;
+            if (first == 0)
+            {
+                return Enumerable.Range(below, _lines.Length - below).TakeWhile(IsOriginallyBlank);
+            }
+
+            if (!IsOriginallyBlank(first - 1))
+            {
+                return [];
+            }
+
+            if (below == _lines.Length)
+            {
+                return [first - 1];
+            }
+
+            return IsOriginallyBlank(below) ? [below] : [];
+        }
+
+        private bool IsOriginallyBlank(int line)
+        {
+            var span = _lines[line].Span;
+            for (var position = span.Start; position < span.End; position++)
+            {
+                if (!char.IsWhiteSpace(text[position]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private List<TextSpan> Merge()
