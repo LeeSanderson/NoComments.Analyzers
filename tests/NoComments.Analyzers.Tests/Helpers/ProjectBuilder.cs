@@ -73,14 +73,15 @@ internal sealed class ProjectBuilder : IDisposable
     public ValueTask AddCsprojFileAsync(
         (string Name, string Value)[]? properties = null,
         (string Name, string Version)[]? packageReferences = null,
-        string[]? additionalFiles = null)
+        string[]? additionalFiles = null,
+        string sdk = "Microsoft.NET.Sdk")
     {
         var propertyElement = BuildPropertyElement(properties);
         var referencesElement = BuildReferencesElement(packageReferences);
         var additionalFilesElement = BuildAdditionalFilesElement(additionalFiles);
 
         var content = $"""
-                       <Project Sdk="Microsoft.NET.Sdk">
+                       <Project Sdk="{sdk}">
                          <PropertyGroup>
                            <OutputType>exe</OutputType>
                            <TargetFramework>net$(NETCoreAppMaximumVersion)</TargetFramework>
