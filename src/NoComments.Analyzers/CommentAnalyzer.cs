@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 
 namespace NoComments.Analyzers;
 
@@ -9,7 +10,7 @@ namespace NoComments.Analyzers;
 public sealed class CommentAnalyzer : DiagnosticAnalyzer
 {
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
-        ImmutableArray.Create(Rules.SingleLineComment, Rules.MultiLineComment);
+        ImmutableArray.Create(Rules.SingleLineComment, Rules.MultiLineComment, Rules.DocumentationComment);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -27,7 +28,7 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
             var rule = RuleFor(trivia);
             if (rule is not null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(rule, trivia.GetLocation()));
+                context.ReportDiagnostic(Diagnostic.Create(rule, CommentLocation(context.Tree, trivia)));
             }
         }
     }
@@ -37,6 +38,26 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
         {
             SyntaxKind.SingleLineCommentTrivia => Rules.SingleLineComment,
             SyntaxKind.MultiLineCommentTrivia => Rules.MultiLineComment,
+            SyntaxKind.SingleLineDocumentationCommentTrivia => Rules.DocumentationComment,
+            SyntaxKind.MultiLineDocumentationCommentTrivia => Rules.DocumentationComment,
             _ => null,
         };
+
+    private static Location CommentLocation(SyntaxTree tree, SyntaxTrivia trivia)
+    {
+        if (!trivia.HasStructure)
+        {
+            return trivia.GetLocation();
+        }
+
+        var span = trivia.FullSpan;
+        var text = tree.GetText();
+        var end = span.End;
+        while (end > span.Start && text[end - 1] is '\r' or '\n')
+        {
+            end--;
+        }
+
+        return Location.Create(tree, TextSpan.FromBounds(span.Start, end));
+    }
 }

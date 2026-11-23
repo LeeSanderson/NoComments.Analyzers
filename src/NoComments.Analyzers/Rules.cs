@@ -29,6 +29,17 @@ internal static class Rules
         description: WhyDescription,
         helpLinkUri: HelpLink("NOC0002"));
 
+    internal static readonly DiagnosticDescriptor DocumentationComment = new(
+        id: "NOC0003",
+        title: "Do not use documentation comments",
+        messageFormat: "Documentation comment: express the intent in code instead",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: WhyDescription
+            + " Only reported when the project generates documentation; otherwise `///` and `/** */` are reported as NOC0001 and NOC0002.",
+        helpLinkUri: HelpLink("NOC0003"));
+
     private static string HelpLink(string id) =>
         $"https://github.com/LeeSanderson/NoComments.Analyzers/blob/main/docs/rules/{id}.md";
 }
