@@ -6,13 +6,18 @@ namespace NoComments.Analyzers.Tests;
 
 public class RemoveCommentShould
 {
-    [Fact]
-    public async Task RemoveACommentOnItsOwnLineTogetherWithTheLine()
-    {
-        var result = await SingleFixHarness.ApplySingleFixesUntilNoneRemainAsync(
-            "class Greeter\n{\n    // Say hello to the user\n    public void Greet() { }\n}\n",
-            DocumentationMode.Diagnose);
+    public static TheoryData<string> WalkthroughNames => [.. Walkthroughs.All.Keys];
 
-        result.ShouldBe("class Greeter\n{\n    public void Greet() { }\n}\n");
+    [Theory]
+    [MemberData(nameof(WalkthroughNames))]
+    public async Task GiveTheWalkthroughResultWhenFixedOneCommentAtATime(string walkthrough)
+    {
+        var (before, after) = Walkthroughs.All[walkthrough];
+
+        var result = await SingleFixHarness.ApplySingleFixesUntilNoneRemainAsync(Lf(before), DocumentationMode.Diagnose);
+
+        result.ShouldBe(Lf(after));
     }
+
+    private static string Lf(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal);
 }
