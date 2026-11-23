@@ -6,6 +6,7 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/NoComments.Analyzers/NoComments.Analyzers.csproj" />
+    <Project Path="src/NoComments.Analyzers.CodeFixes/NoComments.Analyzers.CodeFixes.csproj" />
     <Project Path="src/NoComments.Analyzers.Package/NoComments.Analyzers.Package.csproj" />
   </Folder>
   <Folder Name="/tests/">

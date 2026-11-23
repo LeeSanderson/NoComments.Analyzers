@@ -9,8 +9,14 @@
 
   <ItemGroup>
     <PackageReference Include="CliWrap" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/NoComments.Analyzers/NoComments.Analyzers.csproj" />
+    <ProjectReference Include="../../src/NoComments.Analyzers.CodeFixes/NoComments.Analyzers.CodeFixes.csproj" />
   </ItemGroup>
 
   <ItemGroup>
