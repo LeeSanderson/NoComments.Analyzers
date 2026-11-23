@@ -1,0 +1,98 @@
+# Builds, tests and packs on every push to main and every pull request.
+#
+# Matrix: {ubuntu, windows} x {SDK 9.0.3xx, SDK 10.0.x}. The repository itself always builds
+# with SDK 10 (global.json; the test project is net10.0 and the standards package needs
+# SDK 10). The SDK axis is the SDK the tests' inline consumer projects build with: each
+# consumer gets a generated global.json pinned to NOCOMMENTS_CONSUMER_SDK_VERSION, so the
+# 9.0.3xx leg proves the package loads on the minimum host (VS 17.14 / SDK 9.0.3xx,
+# Roslyn 4.14). ConsumerProjectShould asserts the consumer really resolved that SDK.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+
+jobs:
+  build:
+    name: build (${{ matrix.os }}, SDK ${{ matrix.sdk }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        sdk: [9.0.3xx, 10.0.x]
+        include:
+          - sdk: 9.0.3xx
+            consumer-sdk-version: 9.0.300
+          - sdk: 10.0.x
+            consumer-sdk-version: 10.0.100
+    env:
+      NOCOMMENTS_CONSUMER_SDK_VERSION: ${{ matrix.consumer-sdk-version }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET SDKs (SDK 10 for the repository, matrix SDK for consumers)
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            10.0.x
+            ${{ matrix.sdk }}
+
+      - name: Show installed SDKs
+        run: dotnet --list-sdks
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj', '.config/dotnet-tools.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore local dotnet tools
+        run: dotnet tool restore
+
+      - name: Restore
+        run: dotnet restore NoComments.Analyzers.slnx
+
+      # The Roslyn packages are deliberately pinned to 4.14.0 (the compiler in VS 17.14 /
+      # SDK 9.0.3xx). The substring match excludes Microsoft.CodeAnalysis.CSharp and
+      # Microsoft.CodeAnalysis.CSharp.Workspaces, and nothing else.
+      - name: Check for outdated packages
+        if: matrix.os == 'ubuntu-latest' && matrix.sdk == '10.0.x'
+        run: dotnet tool run dotnet-outdated NoComments.Analyzers.slnx --fail-on-updates --exclude Microsoft.CodeAnalysis.CSharp
+
+      - name: Build (Release)
+        run: dotnet build NoComments.Analyzers.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        run: dotnet test --solution NoComments.Analyzers.slnx --configuration Release --no-build
+
+      - name: Pack
+        run: dotnet pack NoComments.Analyzers.slnx --configuration Release --no-build --output artifacts/packages -p:ContinuousIntegrationBuild=true
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.os }}-sdk-${{ matrix.sdk }}
+          path: artifacts/packages/*.nupkg
+          if-no-files-found: error

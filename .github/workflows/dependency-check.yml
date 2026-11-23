@@ -1,0 +1,81 @@
+# Weekly check for outdated NuGet packages. It only reports: when packages are outdated it
+# creates or updates a single tracking issue (label `dependencies`), and closes that issue
+# once everything is current. scripts/Report-OutdatedPackages.ps1 owns the issue's whole
+# lifecycle. The push trigger re-runs the check after a bump lands so the issue closes
+# itself without waiting for the next Monday.
+#
+# The Roslyn packages (Microsoft.CodeAnalysis.CSharp*) are deliberately pinned to 4.14.0,
+# the compiler in the lowest supported host (VS 17.14 / SDK 9.0.3xx), and are excluded.
+name: Dependency Check
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - Directory.Packages.props
+      - "**/*.csproj"
+  workflow_dispatch:
+
+concurrency:
+  group: dependency-check
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET SDK (honours global.json)
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore local dotnet tools
+        run: dotnet tool restore
+
+      - name: Restore
+        run: dotnet restore NoComments.Analyzers.slnx
+
+      # No --fail-on-updates: this job reports, it never fails on updates. The tool only
+      # writes the JSON report when something is outdated; the captured stdout lets the
+      # script tell "all current" apart from a crashed tool.
+      - name: Check for outdated packages (JSON report)
+        run: dotnet tool run dotnet-outdated NoComments.Analyzers.slnx --exclude Microsoft.CodeAnalysis.CSharp --output outdated-report.json --output-format json | Tee-Object -FilePath outdated-tool-output.txt
+
+      - name: Report outdated packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          ./scripts/Report-OutdatedPackages.ps1
+          -ReportPath outdated-report.json
+          -ToolOutputPath outdated-tool-output.txt
+          -Assignee ${{ github.repository_owner }}
+
+      - name: Upload outdated report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: outdated-report
+          path: |
+            outdated-report.json
+            outdated-tool-output.txt
+          if-no-files-found: ignore
+          retention-days: 30

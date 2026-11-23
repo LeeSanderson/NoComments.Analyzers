@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
 using CliWrap;
@@ -156,6 +157,28 @@ internal sealed class ProjectBuilder : IDisposable
     public Task<BuildOutputFile> BuildAndGetOutputAsync(string[]? buildArguments = null)
     {
         return ExecuteDotnetCommandAndGetOutputAsync("build", buildArguments);
+    }
+
+    public async Task<string> GetSdkVersionAsync()
+    {
+        var output = new StringBuilder();
+        var result = await Cli.Wrap("dotnet")
+            .WithWorkingDirectory(_directory.FullPath)
+            .WithArguments(["msbuild", "test.csproj", "-getProperty:NETCoreSdkVersion"])
+            .WithEnvironmentVariables(env => env.Set("CI", null).Set("GITHUB_ACTIONS", null))
+            .WithStandardOutputPipe(PipeTarget.ToStringBuilder(output))
+            .WithStandardErrorPipe(PipeTarget.ToStringBuilder(output))
+            .WithValidation(CommandResultValidation.None)
+            .ExecuteAsync();
+
+        var sdkVersion = output.ToString().Trim();
+        _testOutputHelper.WriteLine("Consumer SDK version: " + sdkVersion);
+        if (!result.IsSuccess)
+        {
+            throw new InvalidOperationException("Error while evaluating the consumer project:\n" + sdkVersion);
+        }
+
+        return sdkVersion;
     }
 
     private async Task<BuildOutputFile> ExecuteDotnetCommandAndGetOutputAsync(string command, string[]? buildArguments = null)
