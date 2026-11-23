@@ -10,6 +10,9 @@ internal sealed class BuildOutputFile
     [JsonIgnore]
     public string ProjectDirectory { get; set; } = "";
 
+    [JsonIgnore]
+    public int ExitCode { get; set; }
+
     public IEnumerable<BuildOutputFileRunResult> AllResults() => Runs?.SelectMany(r => r.Results ?? []) ?? [];
 
     public IEnumerable<BuildOutputFileRule> AllRules() => Runs?.SelectMany(r => r.Tool?.Driver?.Rules ?? []) ?? [];

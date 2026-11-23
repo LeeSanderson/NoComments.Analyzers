@@ -194,7 +194,9 @@ internal sealed class ProjectBuilder : IDisposable
 
         _testOutputHelper.WriteLine("Process exit code: " + result.ExitCode);
 
-        return await ReadBuildOutputFileAsync();
+        var buildOutputFile = await ReadBuildOutputFileAsync();
+        buildOutputFile.ExitCode = result.ExitCode;
+        return buildOutputFile;
     }
 
     private async Task<BuildOutputFile> ReadBuildOutputFileAsync()
