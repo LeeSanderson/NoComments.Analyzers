@@ -35,7 +35,7 @@ public class RazorCommentSuppressionShould(PackageFixture fixture, ITestOutputHe
 
         var buildOutput = await project.BuildAndGetOutputAsync();
 
-        buildOutput.AllResults().Where(r => r.RuleId == "NOC0004").ShouldBeEmpty();
+        buildOutput.AllResults().ShouldBeEmpty();
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class RazorCommentSuppressionShould(PackageFixture fixture, ITestOutputHe
 
         var buildOutput = await project.BuildAndGetOutputAsync();
 
-        buildOutput.AllResults().Where(r => r.RuleId == "NOC0004").ShouldBeEmpty();
+        buildOutput.AllResults().ShouldBeEmpty();
     }
 
     [Fact]
