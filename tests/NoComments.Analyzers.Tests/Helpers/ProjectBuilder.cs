@@ -163,8 +163,13 @@ internal sealed class ProjectBuilder : IDisposable
     public Task<string> ReadFileAsync(string relativePath) =>
         File.ReadAllTextAsync(_directory.GetPath(relativePath));
 
-    public Task<int> FormatAnalyzersAsync(string diagnosticId) =>
-        RunDotnetAsync(["format", "analyzers", "test.csproj", "--diagnostics", diagnosticId, "--verbosity", "diagnostic"]);
+    public Task<int> FormatAnalyzersAsync(string diagnosticId) => FormatAnalyzersAsync([diagnosticId], includeGenerated: false);
+
+    public Task<int> FormatAnalyzersAsync(string[] diagnosticIds, bool includeGenerated)
+    {
+        string[] arguments = ["format", "analyzers", "test.csproj", "--diagnostics", .. diagnosticIds, "--verbosity", "diagnostic"];
+        return RunDotnetAsync(includeGenerated ? [.. arguments, "--include-generated"] : arguments);
+    }
 
     public async Task<int> RunDotnetAsync(string[] arguments)
     {
