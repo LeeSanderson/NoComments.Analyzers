@@ -6,3 +6,4 @@
 Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 NOC0001 | Maintainability | Warning | CommentAnalyzer
+NOC0002 | Maintainability | Warning | CommentAnalyzer

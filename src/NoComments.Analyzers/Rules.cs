@@ -19,6 +19,16 @@ internal static class Rules
         description: WhyDescription,
         helpLinkUri: HelpLink("NOC0001"));
 
+    internal static readonly DiagnosticDescriptor MultiLineComment = new(
+        id: "NOC0002",
+        title: "Do not use multi-line comments",
+        messageFormat: "Multi-line comment: express the intent in code instead",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: WhyDescription,
+        helpLinkUri: HelpLink("NOC0002"));
+
     private static string HelpLink(string id) =>
         $"https://github.com/LeeSanderson/NoComments.Analyzers/blob/main/docs/rules/{id}.md";
 }

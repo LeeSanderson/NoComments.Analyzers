@@ -9,7 +9,7 @@ namespace NoComments.Analyzers;
 public sealed class CommentAnalyzer : DiagnosticAnalyzer
 {
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
-        ImmutableArray.Create(Rules.SingleLineComment);
+        ImmutableArray.Create(Rules.SingleLineComment, Rules.MultiLineComment);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -21,13 +21,22 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeTree(SyntaxTreeAnalysisContext context)
     {
         var root = context.Tree.GetRoot(context.CancellationToken);
-        var comments = root
-            .DescendantTrivia(descendIntoTrivia: true)
-            .Where(trivia => trivia.IsKind(SyntaxKind.SingleLineCommentTrivia));
 
-        foreach (var comment in comments)
+        foreach (var trivia in root.DescendantTrivia(descendIntoTrivia: true))
         {
-            context.ReportDiagnostic(Diagnostic.Create(Rules.SingleLineComment, comment.GetLocation()));
+            var rule = RuleFor(trivia);
+            if (rule is not null)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(rule, trivia.GetLocation()));
+            }
         }
     }
+
+    private static DiagnosticDescriptor? RuleFor(SyntaxTrivia trivia) =>
+        trivia.Kind() switch
+        {
+            SyntaxKind.SingleLineCommentTrivia => Rules.SingleLineComment,
+            SyntaxKind.MultiLineCommentTrivia => Rules.MultiLineComment,
+            _ => null,
+        };
 }
