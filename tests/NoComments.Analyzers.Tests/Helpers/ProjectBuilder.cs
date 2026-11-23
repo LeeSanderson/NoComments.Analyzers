@@ -160,6 +160,24 @@ internal sealed class ProjectBuilder : IDisposable
         return ExecuteDotnetCommandAndGetOutputAsync("build", buildArguments);
     }
 
+    public Task<string> ReadFileAsync(string relativePath) =>
+        File.ReadAllTextAsync(_directory.GetPath(relativePath));
+
+    public async Task<int> FormatAnalyzersAsync(string diagnosticId)
+    {
+        var result = await Cli.Wrap("dotnet")
+            .WithWorkingDirectory(_directory.FullPath)
+            .WithArguments(["format", "analyzers", "test.csproj", "--diagnostics", diagnosticId, "--verbosity", "diagnostic"])
+            .WithEnvironmentVariables(env => env.Set("CI", null).Set("GITHUB_ACTIONS", null))
+            .WithStandardOutputPipe(PipeTarget.ToDelegate(_testOutputHelper.WriteLine))
+            .WithStandardErrorPipe(PipeTarget.ToDelegate(_testOutputHelper.WriteLine))
+            .WithValidation(CommandResultValidation.None)
+            .ExecuteAsync();
+
+        _testOutputHelper.WriteLine("Process exit code: " + result.ExitCode);
+        return result.ExitCode;
+    }
+
     public async Task<string> GetSdkVersionAsync()
     {
         var output = new StringBuilder();
