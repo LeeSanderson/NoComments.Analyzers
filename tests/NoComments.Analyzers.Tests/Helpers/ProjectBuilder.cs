@@ -163,11 +163,14 @@ internal sealed class ProjectBuilder : IDisposable
     public Task<string> ReadFileAsync(string relativePath) =>
         File.ReadAllTextAsync(_directory.GetPath(relativePath));
 
-    public async Task<int> FormatAnalyzersAsync(string diagnosticId)
+    public Task<int> FormatAnalyzersAsync(string diagnosticId) => FormatAnalyzersAsync([diagnosticId], includeGenerated: false);
+
+    public async Task<int> FormatAnalyzersAsync(string[] diagnosticIds, bool includeGenerated)
     {
+        string[] arguments = ["format", "analyzers", "test.csproj", "--diagnostics", .. diagnosticIds, "--verbosity", "diagnostic"];
         var result = await Cli.Wrap("dotnet")
             .WithWorkingDirectory(_directory.FullPath)
-            .WithArguments(["format", "analyzers", "test.csproj", "--diagnostics", diagnosticId, "--verbosity", "diagnostic"])
+            .WithArguments(includeGenerated ? [.. arguments, "--include-generated"] : arguments)
             .WithEnvironmentVariables(env => env.Set("CI", null).Set("GITHUB_ACTIONS", null))
             .WithStandardOutputPipe(PipeTarget.ToDelegate(_testOutputHelper.WriteLine))
             .WithStandardErrorPipe(PipeTarget.ToDelegate(_testOutputHelper.WriteLine))
