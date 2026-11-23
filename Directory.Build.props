@@ -1,0 +1,9 @@
+<Project>
+  <ItemGroup Condition="'$(MSBuildProjectName)' != 'NoComments.Analyzers'">
+    <!-- Dogfood: apply the source-built analyzer to every project except the analyzer itself. -->
+    <ProjectReference Include="$(MSBuildThisFileDirectory)src/NoComments.Analyzers/NoComments.Analyzers.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all" />
+  </ItemGroup>
+</Project>

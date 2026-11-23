@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/NoComments.Analyzers/NoComments.Analyzers.csproj" />
+    <Project Path="src/NoComments.Analyzers.Package/NoComments.Analyzers.Package.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NoComments.Analyzers.Tests/NoComments.Analyzers.Tests.csproj" />
+  </Folder>
+</Solution>
