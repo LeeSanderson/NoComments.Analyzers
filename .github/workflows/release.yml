@@ -1,0 +1,118 @@
+# Publishes a release when a v* tag is pushed (scripts/New-ReleaseTag.ps1 makes vX.Y.Z tags;
+# prereleases such as v0.1.0-beta.1 are tagged by hand).
+#
+# The tag is the only source of the package version: the leading `v` is stripped and passed
+# as -p:Version. The workflow builds, tests and packs, pushes the .nupkg (and its .snupkg) to
+# nuget.org through NuGet Trusted Publishing, then creates a GitHub Release with
+# auto-generated notes and the packages attached.
+#
+# Trusted Publishing needs a nuget.org policy for this repository and workflow file, and a
+# NUGET_USER secret holding the nuget.org profile name. Until both exist the login step fails.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# id-token: write lets NuGet/login exchange the GitHub OIDC token for a short-lived API key.
+# contents: write lets the workflow create the GitHub Release.
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+
+jobs:
+  release:
+    name: release
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', '**/*.csproj', '.config/dotnet-tools.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      # Read the tag from $env:GITHUB_REF_NAME rather than interpolating it, to keep the tag
+      # value out of the script body.
+      - name: Derive package version from tag
+        id: version
+        run: |
+          $version = "$env:GITHUB_REF_NAME" -replace '^v', ''
+          if ($version -notmatch '^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$') {
+            Write-Error "Tag '$env:GITHUB_REF_NAME' is not vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-PRERELEASE."
+            exit 1
+          }
+          $prerelease = if ($version.Contains('-')) { 'true' } else { 'false' }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "prerelease=$prerelease" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Package version: $version (prerelease: $prerelease)"
+
+      - name: Restore
+        run: dotnet restore NoComments.Analyzers.slnx
+
+      - name: Build (Release)
+        run: dotnet build NoComments.Analyzers.slnx --configuration Release --no-restore -p:ContinuousIntegrationBuild=true -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test --solution NoComments.Analyzers.slnx --configuration Release --no-build
+
+      - name: Pack (tag version)
+        run: dotnet pack src/NoComments.Analyzers.Package/NoComments.Analyzers.Package.csproj --configuration Release --no-build --output artifacts/packages -p:ContinuousIntegrationBuild=true -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+          if-no-files-found: error
+
+      - name: NuGet login (OIDC to temporary API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # PowerShell does not expand globs, so resolve the path explicitly. The matching .snupkg
+      # next to the .nupkg is pushed with it.
+      - name: Publish to nuget.org
+        env:
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+        run: |
+          $pkg = Get-ChildItem artifacts/packages/*.nupkg | Select-Object -First 1 -ExpandProperty FullName
+          dotnet nuget push $pkg --api-key $env:NUGET_API_KEY --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          $assets = Get-ChildItem artifacts/packages/* -Include *.nupkg, *.snupkg | Select-Object -ExpandProperty FullName
+          $arguments = @('release', 'create', $env:GITHUB_REF_NAME) + $assets + @('--verify-tag', '--generate-notes', '--title', $env:GITHUB_REF_NAME)
+          if ($env:PRERELEASE -eq 'true') { $arguments += '--prerelease' }
+          gh @arguments
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
