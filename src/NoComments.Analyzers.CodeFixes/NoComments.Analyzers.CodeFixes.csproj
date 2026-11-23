@@ -5,6 +5,7 @@
     <IsPackable>false</IsPackable>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <DebugType>portable</DebugType>
   </PropertyGroup>
 
   <ItemGroup>

@@ -8,20 +8,77 @@
     <DevelopmentDependency>true</DevelopmentDependency>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <NoPackageAnalysis>true</NoPackageAnalysis>
-    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddAnalyzersToPackage</TargetsForTfmSpecificContentInPackage>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddAnalyzersToPackage</TargetsForTfmSpecificContentInPackage>  </PropertyGroup>
+
+  <PropertyGroup>
+    <Authors>Lee Sanderson</Authors>
+    <Description>Roslyn analyzers that report comments in C# and Razor code, with a code fix that removes them.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageTags>analyzer roslyn comments code-quality csharp razor</PackageTags>
+    <PackageProjectUrl>https://github.com/LeeSanderson/NoComments.Analyzers</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/LeeSanderson/NoComments.Analyzers</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageReleaseNotes>https://github.com/LeeSanderson/NoComments.Analyzers/blob/main/CHANGELOG.md</PackageReleaseNotes>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" Visible="false" />
+    <None Include="icon.png" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="../NoComments.Analyzers.CodeFixes/NoComments.Analyzers.CodeFixes.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
   </ItemGroup>
 
-  <Target Name="AddAnalyzersToPackage">
+  <Target Name="GetNoCommentsAnalyzerAssemblies">
     <MSBuild Projects="../NoComments.Analyzers/NoComments.Analyzers.csproj;../NoComments.Analyzers.CodeFixes/NoComments.Analyzers.CodeFixes.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
       <Output TaskParameter="TargetOutputs" ItemName="NoCommentsAnalyzerAssembly" />
     </MSBuild>
+  </Target>
+
+  <Target Name="AddAnalyzersToPackage" DependsOnTargets="GetNoCommentsAnalyzerAssemblies">
     <ItemGroup>
       <TfmSpecificPackageFile Include="@(NoCommentsAnalyzerAssembly)" PackagePath="analyzers/dotnet/cs" />
+      <TfmSpecificPackageFile Include="@(NoCommentsAnalyzerAssembly->'%(RootDir)%(Directory)%(Filename).pdb')" PackagePath="analyzers/dotnet/cs" />
     </ItemGroup>
   </Target>
+
+  <Target Name="RemoveSymbolsFromMainPackage" AfterTargets="GenerateNuspec" Condition="'$(ContinuePackingAfterGeneratingNuspec)' == 'true'">
+    <RemovePackageEntries Package="$([System.IO.Path]::Combine($(PackageOutputAbsolutePath), $(PackageId).$(PackageVersion).nupkg))" Extension=".pdb" />
+  </Target>
+
+  <UsingTask TaskName="RemovePackageEntries" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <Package ParameterType="System.String" Required="true" />
+      <Extension ParameterType="System.String" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO.Compression" />
+      <Using Namespace="System.Linq" />
+      <Code Type="Fragment" Language="cs">
+        <![CDATA[
+        if (!File.Exists(Package))
+        {
+            Log.LogError("Cannot remove " + Extension + " files from " + Package + " because it does not exist.");
+            return false;
+        }
+
+        using (var archive = ZipFile.Open(Package, ZipArchiveMode.Update))
+        {
+            foreach (var entry in archive.Entries.Where(e => e.FullName.EndsWith(Extension, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                Log.LogMessage(MessageImportance.Low, "Removing " + entry.FullName + " from " + Package);
+                entry.Delete();
+            }
+        }
+        ]]>
+      </Code>
+    </Task>
+  </UsingTask>
 
 </Project>
