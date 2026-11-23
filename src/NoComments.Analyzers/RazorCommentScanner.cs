@@ -6,7 +6,7 @@ internal sealed class RazorCommentScanner
 {
     private static readonly HashSet<string> BlockKeywords = new(StringComparer.Ordinal)
     {
-        "code", "functions", "if", "for", "foreach", "while", "switch", "lock", "try", "do", "section",
+        "code", "functions", "if", "for", "foreach", "while", "switch", "lock", "try", "do",
     };
 
     private static readonly HashSet<string> ContinuationKeywords = new(StringComparer.Ordinal)
@@ -54,18 +54,25 @@ internal sealed class RazorCommentScanner
     private bool StartsWith(string value) =>
         string.CompareOrdinal(_text, _position, value, 0, value.Length) == 0;
 
-    private void ScanMarkup()
+    private void ScanMarkup() => ScanMarkupWhile(_ => true);
+
+    private void ScanMarkupWhile(Func<char, bool> continues)
     {
-        while (!AtEnd)
+        while (!AtEnd && continues(Current))
         {
-            if (Current == '@')
-            {
-                ScanTransition();
-            }
-            else
-            {
-                _position++;
-            }
+            ScanMarkupCharacter();
+        }
+    }
+
+    private void ScanMarkupCharacter()
+    {
+        if (Current == '@')
+        {
+            ScanTransition();
+        }
+        else
+        {
+            _position++;
         }
     }
 
@@ -85,23 +92,15 @@ internal sealed class RazorCommentScanner
         }
 
         _position++;
-        switch (next)
+        if (next is '{' or '(')
         {
-            case '{':
-                _position++;
-                ScanCode('}', '{');
-                break;
-            case '(':
-                _position++;
-                ScanCode(')', '(');
-                break;
-            default:
-                if (IsIdentifierStart(next))
-                {
-                    ScanKeywordOrExpression(ReadIdentifier());
-                }
+            ScanBracketed();
+            return;
+        }
 
-                break;
+        if (IsIdentifierStart(next))
+        {
+            ScanKeywordOrExpression(ReadIdentifier());
         }
     }
 
@@ -117,6 +116,14 @@ internal sealed class RazorCommentScanner
         else if (word == "using")
         {
             ScanUsing();
+        }
+        else if (word == "section")
+        {
+            ScanSection();
+        }
+        else if (word == "await")
+        {
+            ScanAwaitExpression();
         }
         else if (LineDirectives.Contains(word))
         {
@@ -144,14 +151,46 @@ internal sealed class RazorCommentScanner
         }
     }
 
+    private void ScanSection()
+    {
+        SkipPast("{");
+        var depth = 0;
+        while (!AtEnd && (Current != '}' || depth > 0))
+        {
+            depth += Current switch
+            {
+                '{' => 1,
+                '}' => -1,
+                _ => 0,
+            };
+            ScanMarkupCharacter();
+        }
+
+        _position++;
+    }
+
+    private void ScanAwaitExpression()
+    {
+        while (Current is ' ' or '\t')
+        {
+            _position++;
+        }
+
+        if (IsIdentifierStart(Current))
+        {
+            ReadIdentifier();
+        }
+
+        ScanImplicitExpression();
+    }
+
     private void ScanBlockStatement()
     {
         while (!AtEnd)
         {
             if (Current == '{')
             {
-                _position++;
-                ScanCode('}', '{');
+                ScanBracketed();
                 if (!TryContinueStatement())
                 {
                     return;
@@ -159,8 +198,7 @@ internal sealed class RazorCommentScanner
             }
             else if (Current == '(')
             {
-                _position++;
-                ScanCode(')', '(');
+                ScanBracketed();
             }
             else
             {
@@ -202,15 +240,9 @@ internal sealed class RazorCommentScanner
     {
         while (!AtEnd)
         {
-            if (Current == '(')
+            if (Current is '(' or '[')
             {
-                _position++;
-                ScanCode(')', '(');
-            }
-            else if (Current == '[')
-            {
-                _position++;
-                ScanCode(']', '[');
+                ScanBracketed();
             }
             else if (Current == '.' && IsIdentifierStart(Peek(1)))
             {
@@ -224,55 +256,58 @@ internal sealed class RazorCommentScanner
         }
     }
 
-    private void ScanCode(char closer, char opener)
-    {
-        var lastSignificant = opener;
-        while (!AtEnd)
-        {
-            var current = Current;
-            if (current == closer)
-            {
-                _position++;
-                return;
-            }
-
-            if (TryScanNested(current))
-            {
-                lastSignificant = current;
-            }
-            else if (TryScanCodeTransition() || TryScanMarkupStatement(lastSignificant))
-            {
-                lastSignificant = ';';
-            }
-            else if (TryScanCodeElement())
-            {
-                lastSignificant = '"';
-            }
-            else
-            {
-                lastSignificant = char.IsWhiteSpace(current) ? lastSignificant : current;
-                _position++;
-            }
-        }
-    }
-
-    private bool TryScanNested(char current)
-    {
-        var closer = current switch
+    private static char ClosingBracketFor(char opener) =>
+        opener switch
         {
             '{' => '}',
             '(' => ')',
             '[' => ']',
             _ => '\0',
         };
-        if (closer == '\0')
+
+    private void ScanBracketed()
+    {
+        var opener = Current;
+        _position++;
+        ScanCode(ClosingBracketFor(opener), startsAtStatement: opener == '{');
+    }
+
+    private void ScanCode(char closer, bool startsAtStatement)
+    {
+        var atStatementStart = startsAtStatement;
+        while (!AtEnd)
+        {
+            if (Current == closer)
+            {
+                _position++;
+                return;
+            }
+
+            atStatementStart = ScanCodeStep(atStatementStart);
+        }
+    }
+
+    private bool ScanCodeStep(bool atStatementStart)
+    {
+        var current = Current;
+        if (ClosingBracketFor(current) != '\0')
+        {
+            ScanBracketed();
+            return current == '{';
+        }
+
+        if (TryScanCodeTransition() || TryScanMarkupStatement(atStatementStart))
+        {
+            return true;
+        }
+
+        if (TryScanCodeElement())
         {
             return false;
         }
 
         _position++;
-        ScanCode(closer, current);
-        return true;
+        return char.IsWhiteSpace(current) ? atStatementStart : current is '{' or '}' or ';' or ':';
     }
 
     private bool TryScanCodeTransition()
@@ -297,9 +332,9 @@ internal sealed class RazorCommentScanner
         }
     }
 
-    private bool TryScanMarkupStatement(char lastSignificant)
+    private bool TryScanMarkupStatement(bool atStatementStart)
     {
-        if (Current != '<' || !char.IsLetter(Peek(1)) || lastSignificant is not ('{' or '}' or ';' or ':'))
+        if (!atStatementStart || Current != '<' || !char.IsLetter(Peek(1)))
         {
             return false;
         }
@@ -447,23 +482,10 @@ internal sealed class RazorCommentScanner
         }
 
         _position++;
-        ScanCode('}', '(');
+        ScanCode('}', startsAtStatement: false);
     }
 
-    private void ScanMarkupLine()
-    {
-        while (!AtEnd && Current != '\n')
-        {
-            if (Current == '@')
-            {
-                ScanTransition();
-            }
-            else
-            {
-                _position++;
-            }
-        }
-    }
+    private void ScanMarkupLine() => ScanMarkupWhile(current => current != '\n');
 
     private void ScanMarkupElement()
     {
@@ -533,18 +555,7 @@ internal sealed class RazorCommentScanner
     private void ScanAttributeValue(char quote)
     {
         _position++;
-        while (!AtEnd && Current != quote)
-        {
-            if (Current == '@')
-            {
-                ScanTransition();
-            }
-            else
-            {
-                _position++;
-            }
-        }
-
+        ScanMarkupWhile(current => current != quote);
         _position++;
     }
 

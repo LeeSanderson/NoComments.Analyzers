@@ -56,10 +56,12 @@ public class RazorCommentShould(PackageFixture fixture, ITestOutputHelper testOu
 
         var buildOutput = await project.BuildAndGetOutputAsync();
 
-        buildOutput.DiagnosticsIn("Components/Widget.razor").Where(d => d.RuleId == "NOC0004").ShouldBe(
+        buildOutput.DiagnosticsIn("Components/Widget.razor").ShouldBe(
         [
             new ReportedDiagnostic("NOC0004", 1, 1, 1, 10),
             new ReportedDiagnostic("NOC0004", 6, 5, 6, 22),
+            new ReportedDiagnostic("NOC0001", 11, 5, 11, 20),
+            new ReportedDiagnostic("NOC0002", 12, 5, 12, 22),
             new ReportedDiagnostic("NOC0004", 15, 5, 15, 24),
         ]);
     }
@@ -125,6 +127,51 @@ public class RazorCommentShould(PackageFixture fixture, ITestOutputHelper testOu
         [
             new ReportedDiagnostic("NOC0004", 3, 13, 3, 24),
             new ReportedDiagnostic("NOC0004", 13, 1, 13, 12),
+        ]);
+    }
+
+    [Fact]
+    public async Task NotReportALookAlikeInsideAnAwaitExpression()
+    {
+        using var project = await CreateRazorProjectBuilderAsync();
+        await project.AddFileAsync(
+            "Pages/Index.cshtml",
+            """
+            @page
+            <div>@await Html.PartialAsync("@* not a comment *@")</div>
+            @* after *@
+
+            """);
+
+        var buildOutput = await project.BuildAndGetOutputAsync();
+
+        buildOutput.DiagnosticsIn("Pages/Index.cshtml").ShouldBe(
+        [
+            new ReportedDiagnostic("NOC0004", 3, 1, 3, 12),
+        ]);
+    }
+
+    [Fact]
+    public async Task ReportARazorCommentAfterLooseTextInASection()
+    {
+        using var project = await CreateRazorProjectBuilderAsync();
+        await project.AddFileAsync(
+            "Pages/Index.cshtml",
+            """
+            @page
+            @section Scripts {
+                <p>a</p> It's @* in a section *@
+            }
+            @* after *@
+
+            """);
+
+        var buildOutput = await project.BuildAndGetOutputAsync();
+
+        buildOutput.DiagnosticsIn("Pages/Index.cshtml").ShouldBe(
+        [
+            new ReportedDiagnostic("NOC0004", 3, 19, 3, 37),
+            new ReportedDiagnostic("NOC0004", 5, 1, 5, 12),
         ]);
     }
 
