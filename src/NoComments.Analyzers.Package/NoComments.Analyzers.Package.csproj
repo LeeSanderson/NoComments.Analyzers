@@ -11,8 +11,12 @@
     <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);AddAnalyzersToPackage</TargetsForTfmSpecificContentInPackage>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../NoComments.Analyzers.CodeFixes/NoComments.Analyzers.CodeFixes.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
   <Target Name="AddAnalyzersToPackage">
-    <MSBuild Projects="../NoComments.Analyzers/NoComments.Analyzers.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+    <MSBuild Projects="../NoComments.Analyzers/NoComments.Analyzers.csproj;../NoComments.Analyzers.CodeFixes/NoComments.Analyzers.CodeFixes.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
       <Output TaskParameter="TargetOutputs" ItemName="NoCommentsAnalyzerAssembly" />
     </MSBuild>
     <ItemGroup>
