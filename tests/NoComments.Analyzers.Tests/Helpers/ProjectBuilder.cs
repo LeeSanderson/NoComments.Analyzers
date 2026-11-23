@@ -155,19 +155,22 @@ internal sealed class ProjectBuilder : IDisposable
         _directory.Dispose();
     }
 
-    public Task<BuildOutputFile> BuildAndGetOutputAsync(string[]? buildArguments = null)
+    public Task<BuildOutputFile> BuildAndGetOutputAsync(string[]? buildArguments = null, string sarifPath = BuildOutputFileName)
     {
-        return ExecuteDotnetCommandAndGetOutputAsync("build", buildArguments);
+        return ExecuteDotnetCommandAndGetOutputAsync("build", buildArguments, sarifPath);
     }
 
     public Task<string> ReadFileAsync(string relativePath) =>
         File.ReadAllTextAsync(_directory.GetPath(relativePath));
 
-    public async Task<int> FormatAnalyzersAsync(string diagnosticId)
+    public Task<int> FormatAnalyzersAsync(string diagnosticId) =>
+        RunDotnetAsync(["format", "analyzers", "test.csproj", "--diagnostics", diagnosticId, "--verbosity", "diagnostic"]);
+
+    public async Task<int> RunDotnetAsync(string[] arguments)
     {
         var result = await Cli.Wrap("dotnet")
             .WithWorkingDirectory(_directory.FullPath)
-            .WithArguments(["format", "analyzers", "test.csproj", "--diagnostics", diagnosticId, "--verbosity", "diagnostic"])
+            .WithArguments(arguments)
             .WithEnvironmentVariables(env => env.Set("CI", null).Set("GITHUB_ACTIONS", null))
             .WithStandardOutputPipe(PipeTarget.ToDelegate(_testOutputHelper.WriteLine))
             .WithStandardErrorPipe(PipeTarget.ToDelegate(_testOutputHelper.WriteLine))
@@ -200,7 +203,7 @@ internal sealed class ProjectBuilder : IDisposable
         return sdkVersion;
     }
 
-    private async Task<BuildOutputFile> ExecuteDotnetCommandAndGetOutputAsync(string command, string[]? buildArguments = null)
+    private async Task<BuildOutputFile> ExecuteDotnetCommandAndGetOutputAsync(string command, string[]? buildArguments, string sarifPath)
     {
         var result = await Cli.Wrap("dotnet")
             .WithWorkingDirectory(_directory.FullPath)
@@ -213,14 +216,14 @@ internal sealed class ProjectBuilder : IDisposable
 
         _testOutputHelper.WriteLine("Process exit code: " + result.ExitCode);
 
-        var buildOutputFile = await ReadBuildOutputFileAsync();
+        var buildOutputFile = await ReadBuildOutputFileAsync(sarifPath);
         buildOutputFile.ExitCode = result.ExitCode;
         return buildOutputFile;
     }
 
-    private async Task<BuildOutputFile> ReadBuildOutputFileAsync()
+    public async Task<BuildOutputFile> ReadBuildOutputFileAsync(string sarifPath)
     {
-        var bytes = await File.ReadAllBytesAsync(_directory.GetPath(BuildOutputFileName));
+        var bytes = await File.ReadAllBytesAsync(_directory.GetPath(sarifPath));
         var buildOutputFile = JsonSerializer.Deserialize<BuildOutputFile>(bytes) ?? throw new InvalidOperationException("The sarif file is invalid");
         buildOutputFile.ProjectDirectory = _directory.FullPath;
 
