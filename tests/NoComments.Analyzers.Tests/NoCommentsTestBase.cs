@@ -16,4 +16,21 @@ public class NoCommentsTestBase(PackageFixture fixture, ITestOutputHelper testOu
         await project.AddCsprojFileAsync(properties, packageReferences, additionalFiles);
         return project;
     }
+
+    internal async Task<ProjectBuilder> CreateRazorProjectBuilderAsync((string Name, string Value)[]? properties = null)
+    {
+        var project = new ProjectBuilder(fixture, testOutputHelper);
+        await project.AddCsprojFileAsync(properties, sdk: "Microsoft.NET.Sdk.Web");
+        await project.AddFileAsync(
+            "Program.cs",
+            """
+            var builder = WebApplication.CreateBuilder(args);
+            builder.Services.AddRazorPages();
+            var app = builder.Build();
+            app.MapRazorPages();
+            app.Run();
+
+            """);
+        return project;
+    }
 }

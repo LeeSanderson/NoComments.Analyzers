@@ -14,7 +14,7 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
 
     public override void Initialize(AnalysisContext context)
     {
-        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
+        context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
         context.RegisterSyntaxTreeAction(AnalyzeTree);
     }
@@ -26,11 +26,25 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
         foreach (var trivia in root.DescendantTrivia(descendIntoTrivia: true))
         {
             var rule = RuleFor(trivia);
-            if (rule is not null)
+            if (rule is null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(rule, CommentLocation(context.Tree, trivia)));
+                continue;
+            }
+
+            var location = CommentLocation(context.Tree, trivia);
+            if (!context.IsGeneratedCode || IsWrittenInRazorFile(location))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(rule, location));
             }
         }
+    }
+
+    private static bool IsWrittenInRazorFile(Location location)
+    {
+        var mapped = location.GetMappedLineSpan();
+        return mapped.HasMappedPath
+            && (mapped.Path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
+                || mapped.Path.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase));
     }
 
     private static DiagnosticDescriptor? RuleFor(SyntaxTrivia trivia) =>
