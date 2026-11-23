@@ -35,7 +35,13 @@ internal sealed class RemoveCommentFixAllProvider : FixAllProvider
         ImmutableArray<Diagnostic> diagnostics,
         CancellationToken cancellationToken)
     {
-        var commentsByDocument = diagnostics
+        var byRoute = diagnostics.ToLookup(IsMappedToRazorFile);
+
+        var razorComments = byRoute[true]
+            .Select(diagnostic => diagnostic.Location.GetMappedLineSpan())
+            .ToLookup(mapped => mapped.Path, mapped => mapped.Span, StringComparer.OrdinalIgnoreCase);
+
+        var commentsByDocument = byRoute[false]
             .Select(diagnostic => (Document: solution.GetDocument(diagnostic.Location.SourceTree), Comment: diagnostic.Location.SourceSpan))
             .Where(target => target.Document is not null)
             .GroupBy(target => target.Document!.Id, target => target.Comment);
@@ -47,8 +53,36 @@ internal sealed class RemoveCommentFixAllProvider : FixAllProvider
             solution = solution.WithDocumentText(comments.Key, CommentRemoval.Remove(text, comments.Distinct().ToImmutableArray()));
         }
 
+        foreach (var comments in razorComments)
+        {
+            foreach (var documentId in RazorDocumentIds(solution, comments.Key))
+            {
+                var text = await solution.GetAdditionalDocument(documentId)!.GetTextAsync(cancellationToken).ConfigureAwait(false);
+                var spans = comments.Select(text.Lines.GetTextSpan).Distinct().ToImmutableArray();
+                solution = solution.WithAdditionalDocumentText(documentId, CommentRemoval.Remove(text, spans));
+            }
+        }
+
         return solution;
     }
+
+    private static bool IsMappedToRazorFile(Diagnostic diagnostic)
+    {
+        var mapped = diagnostic.Location.GetMappedLineSpan();
+        return mapped.HasMappedPath && CommentAnalyzer.IsRazorPath(mapped.Path);
+    }
+
+    private static IEnumerable<DocumentId> RazorDocumentIds(Solution solution, string path) =>
+        solution.Projects
+            .SelectMany(project => project.AdditionalDocuments)
+            .Where(document => document.FilePath is { } filePath && SamePath(filePath, path))
+            .Select(document => document.Id)
+            .ToList();
+
+    private static bool SamePath(string left, string right) =>
+        string.Equals(Normalize(left), Normalize(right), StringComparison.OrdinalIgnoreCase);
+
+    private static string Normalize(string path) => path.Replace('\\', '/');
 
     private static async Task<ImmutableArray<Diagnostic>> DiagnosticsInScopeAsync(FixAllContext fixAllContext)
     {

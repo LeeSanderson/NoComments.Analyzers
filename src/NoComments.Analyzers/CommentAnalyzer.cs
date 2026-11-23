@@ -67,7 +67,7 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
         return mapped.HasMappedPath && IsRazorPath(mapped.Path);
     }
 
-    private static bool IsRazorPath(string path)
+    internal static bool IsRazorPath(string path)
     {
         return path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
             || path.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase);
