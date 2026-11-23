@@ -1,5 +1,6 @@
 using NoComments.Analyzers.Tests.Helpers;
 using Shouldly;
+using static NoComments.Analyzers.Tests.Helpers.LineEndings;
 
 namespace NoComments.Analyzers.Tests;
 
@@ -189,6 +190,4 @@ public class DotnetFormatRazorShould(PackageFixture fixture, ITestOutputHelper t
             .Order(StringComparer.Ordinal)
             .Select(path => (path, File.ReadAllText(path)))
             .ToArray();
-
-    private static string WithLf(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal);
 }

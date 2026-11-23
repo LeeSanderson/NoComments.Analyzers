@@ -1,5 +1,6 @@
 using NoComments.Analyzers.Tests.Helpers;
 using Shouldly;
+using static NoComments.Analyzers.Tests.Helpers.LineEndings;
 
 namespace NoComments.Analyzers.Tests;
 
@@ -91,6 +92,4 @@ public class DotnetFormatShould(PackageFixture fixture, ITestOutputHelper testOu
         exitCode.ShouldBe(0);
         (await project.ReadFileAsync("Program.cs")).ShouldBe(WithLf(after));
     }
-
-    private static string WithLf(string text) => text.Replace("\r\n", "\n", StringComparison.Ordinal);
 }

@@ -15,16 +15,13 @@ internal sealed class BuildOutputFile
 
     public IEnumerable<BuildOutputFileRunResult> AllResults() => Runs?.SelectMany(r => r.Results ?? []) ?? [];
 
-    public IEnumerable<BuildOutputFileRule> AllRules() => Runs?.SelectMany(r => r.Tool?.Driver?.Rules ?? []) ?? [];
-
     public bool HasError() => AllResults().Any(r => r.Level == "error" && !r.IsSuppressed);
-    public bool HasError(string ruleId) => AllResults().Any(r => r.Level == "error" && r.RuleId == ruleId && !r.IsSuppressed);
-    public bool HasWarning(string ruleId) => AllResults().Any(r => r.Level == "warning" && r.RuleId == ruleId && !r.IsSuppressed);
-    public bool HasNote(string ruleId) => AllResults().Any(r => r.Level == "note" && r.RuleId == ruleId && !r.IsSuppressed);
+    public bool HasError(string ruleId) => HasUnsuppressed("error", ruleId);
+    public bool HasWarning(string ruleId) => HasUnsuppressed("warning", ruleId);
+    public bool HasNote(string ruleId) => HasUnsuppressed("note", ruleId);
 
-    public BuildOutputFileRule Rule(string ruleId) =>
-        AllRules().FirstOrDefault(r => r.Id == ruleId)
-        ?? throw new InvalidOperationException($"The SARIF log does not describe rule {ruleId}");
+    private bool HasUnsuppressed(string level, string ruleId) =>
+        AllResults().Any(r => r.Level == level && r.RuleId == ruleId && !r.IsSuppressed);
 
     public IReadOnlyList<ReportedDiagnostic> DiagnosticsIn(string relativePath)
     {
@@ -42,64 +39,6 @@ internal sealed class BuildOutputFile
     {
         [JsonPropertyName("results")]
         public BuildOutputFileRunResult[]? Results { get; set; }
-
-        [JsonPropertyName("tool")]
-        public BuildOutputFileTool? Tool { get; set; }
-    }
-
-    internal sealed class BuildOutputFileTool
-    {
-        [JsonPropertyName("driver")]
-        public BuildOutputFileDriver? Driver { get; set; }
-    }
-
-    internal sealed class BuildOutputFileDriver
-    {
-        [JsonPropertyName("rules")]
-        public BuildOutputFileRule[]? Rules { get; set; }
-    }
-
-    internal sealed class BuildOutputFileRule
-    {
-        [JsonPropertyName("id")]
-        public string? Id { get; set; }
-
-        [JsonPropertyName("shortDescription")]
-        public BuildOutputFileRunResultMessage? ShortDescription { get; set; }
-
-        [JsonPropertyName("fullDescription")]
-        public BuildOutputFileRunResultMessage? FullDescription { get; set; }
-
-        [JsonPropertyName("helpUri")]
-        public Uri? HelpUri { get; set; }
-
-        [JsonPropertyName("defaultConfiguration")]
-        public BuildOutputFileRuleConfiguration? DefaultConfiguration { get; set; }
-
-        [JsonPropertyName("properties")]
-        public BuildOutputFileRuleProperties? Properties { get; set; }
-
-        public string DefaultLevel => DefaultConfiguration?.Level ?? "warning";
-
-        public bool IsEnabledByDefault => DefaultConfiguration?.Enabled ?? true;
-    }
-
-    internal sealed class BuildOutputFileRuleConfiguration
-    {
-        [JsonPropertyName("level")]
-        public string? Level { get; set; }
-
-        [JsonPropertyName("enabled")]
-        public bool? Enabled { get; set; }
-    }
-
-    internal sealed class BuildOutputFileRuleProperties
-    {
-        [JsonPropertyName("category")]
-        public string? Category { get; set; }
-
-        [JsonPropertyName("tags")]
-        public string[]? Tags { get; set; }
     }
 
     internal sealed class BuildOutputFileRunResult

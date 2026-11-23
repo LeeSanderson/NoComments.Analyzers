@@ -6,6 +6,9 @@ namespace NoComments.Analyzers.Tests;
 
 public class DiagnosticDescriptorShould
 {
+    private const string WhyDescription =
+        "Comments drift out of step with the code they describe. Express the intent through names, types and tests instead.";
+
     private static readonly string[] RulePageSections =
     [
         "## Why",
@@ -26,6 +29,39 @@ public class DiagnosticDescriptorShould
             .Select(descriptor => descriptor.Id)
             .Order(StringComparer.Ordinal)
             .ShouldBe(["NOC0001", "NOC0002", "NOC0003", "NOC0004"]);
+    }
+
+    [Theory]
+    [InlineData(
+        "NOC0001",
+        "Do not use single-line comments",
+        "Single-line comment: express the intent in code instead",
+        WhyDescription)]
+    [InlineData(
+        "NOC0002",
+        "Do not use multi-line comments",
+        "Multi-line comment: express the intent in code instead",
+        WhyDescription)]
+    [InlineData(
+        "NOC0003",
+        "Do not use documentation comments",
+        "Documentation comment: express the intent in code instead",
+        WhyDescription + " Only reported when the project generates documentation; otherwise `///` and `/** */` are reported as NOC0001 and NOC0002.")]
+    [InlineData(
+        "NOC0004",
+        "Do not use Razor comments",
+        "Razor comment: express the intent in code instead",
+        WhyDescription + " Reported at build time only and can only be suppressed project-wide.")]
+    public void DescribeItsRuleWithTheSpecifiedText(string id, string title, string message, string description)
+    {
+        var descriptor = SupportedDiagnostics().Single(d => d.Id == id);
+
+        descriptor.Title.ToString().ShouldBe(title);
+        descriptor.MessageFormat.ToString().ShouldBe(message);
+        descriptor.Description.ToString().ShouldBe(description);
+        descriptor.Category.ShouldBe("Maintainability");
+        descriptor.DefaultSeverity.ShouldBe(DiagnosticSeverity.Warning);
+        descriptor.IsEnabledByDefault.ShouldBeTrue();
     }
 
     [Theory]
