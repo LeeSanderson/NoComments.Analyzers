@@ -8,3 +8,4 @@ Rule ID | Category | Severity | Notes
 NOC0001 | Maintainability | Warning | CommentAnalyzer
 NOC0002 | Maintainability | Warning | CommentAnalyzer
 NOC0003 | Maintainability | Warning | CommentAnalyzer
+NOC0004 | Maintainability | Warning | CommentAnalyzer

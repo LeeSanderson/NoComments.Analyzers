@@ -10,13 +10,35 @@ namespace NoComments.Analyzers;
 public sealed class CommentAnalyzer : DiagnosticAnalyzer
 {
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
-        ImmutableArray.Create(Rules.SingleLineComment, Rules.MultiLineComment, Rules.DocumentationComment);
+        ImmutableArray.Create(Rules.SingleLineComment, Rules.MultiLineComment, Rules.DocumentationComment, Rules.RazorComment);
 
     public override void Initialize(AnalysisContext context)
     {
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
         context.RegisterSyntaxTreeAction(AnalyzeTree);
+        context.RegisterAdditionalFileAction(AnalyzeAdditionalFile);
+    }
+
+    private static void AnalyzeAdditionalFile(AdditionalFileAnalysisContext context)
+    {
+        var path = context.AdditionalFile.Path;
+        if (!IsRazorPath(path))
+        {
+            return;
+        }
+
+        var text = context.AdditionalFile.GetText(context.CancellationToken);
+        if (text is null)
+        {
+            return;
+        }
+
+        foreach (var span in RazorCommentScanner.FindComments(text.ToString()))
+        {
+            var location = Location.Create(path, span, text.Lines.GetLinePositionSpan(span));
+            context.ReportDiagnostic(Diagnostic.Create(Rules.RazorComment, location));
+        }
     }
 
     private static void AnalyzeTree(SyntaxTreeAnalysisContext context)
@@ -42,9 +64,13 @@ public sealed class CommentAnalyzer : DiagnosticAnalyzer
     private static bool IsWrittenInRazorFile(Location location)
     {
         var mapped = location.GetMappedLineSpan();
-        return mapped.HasMappedPath
-            && (mapped.Path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
-                || mapped.Path.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase));
+        return mapped.HasMappedPath && IsRazorPath(mapped.Path);
+    }
+
+    private static bool IsRazorPath(string path)
+    {
+        return path.EndsWith(".razor", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase);
     }
 
     private static DiagnosticDescriptor? RuleFor(SyntaxTrivia trivia) =>

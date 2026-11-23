@@ -40,6 +40,16 @@ internal static class Rules
             + " Only reported when the project generates documentation; otherwise `///` and `/** */` are reported as NOC0001 and NOC0002.",
         helpLinkUri: HelpLink("NOC0003"));
 
+    internal static readonly DiagnosticDescriptor RazorComment = new(
+        id: "NOC0004",
+        title: "Do not use Razor comments",
+        messageFormat: "Razor comment: express the intent in code instead",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: WhyDescription + " Reported at build time only and can only be suppressed project-wide.",
+        helpLinkUri: HelpLink("NOC0004"));
+
     private static string HelpLink(string id) =>
         $"https://github.com/LeeSanderson/NoComments.Analyzers/blob/main/docs/rules/{id}.md";
 }
