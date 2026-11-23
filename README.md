@@ -15,7 +15,7 @@ NoComments.Analyzers is not related to the `NoCommentsAnalyzer` package on nuget
 | NOC0003 | Do not use documentation comments | Warning | Yes | [NOC0003](https://github.com/LeeSanderson/NoComments.Analyzers/blob/main/docs/rules/NOC0003.md) |
 | NOC0004 | Do not use Razor comments | Warning | No | [NOC0004](https://github.com/LeeSanderson/NoComments.Analyzers/blob/main/docs/rules/NOC0004.md) |
 
-All rules are in the `Maintainability` category. Each comment gets one diagnostic, and each rule's severity can be set separately. There are no built-in exemptions: license headers, `TODO` notes and tool directives written as comments are reported like any other comment.
+All rules are in the `Maintainability` category. Each comment gets one diagnostic, and each rule's severity can be set separately. No comment is exempt: license headers, `TODO` notes and tool directives written as comments are reported like any other comment.
 
 Not reported: preprocessor directives (`#region`, `#pragma`, `#nullable`), shebang lines, disabled `#if` text, HTML comments (`<!-- -->`) and generated code. The one exception to the generated-code rule is a C# comment a person wrote in a Razor file, which is reported at its position in the `.razor` or `.cshtml` file.
 
