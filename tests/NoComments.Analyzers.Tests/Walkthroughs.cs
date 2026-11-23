@@ -79,6 +79,24 @@ internal static class Walkthroughs
                 return value;
 
                 """),
+            ["06 Documentation comments"] = (
+                """
+                /// <summary>
+                /// Adds two numbers.
+                /// </summary>
+                /// <param name="a">First.</param>
+                public int Add(int a, int b) => a + b;
+
+                /** <summary>Old style.</summary> */
+                public int Sub(int a, int b) => a - b;
+
+                """,
+                """
+                public int Add(int a, int b) => a + b;
+
+                public int Sub(int a, int b) => a - b;
+
+                """),
             ["07 Start and end of file"] = (
                 """
                 // Copyright (c) Example Ltd.
@@ -94,6 +112,24 @@ internal static class Walkthroughs
                 namespace Demo;
 
                 public class A { }
+
+                """),
+            ["08 #region and #if"] = (
+                """
+                #region Helpers // part of the region name
+                    // helper comment
+                    void Help() { }
+                #endregion
+                #if DEBUG // a real comment
+                #endif
+
+                """,
+                """
+                #region Helpers // part of the region name
+                    void Help() { }
+                #endregion
+                #if DEBUG
+                #endif
 
                 """),
             ["09 Empty block"] = (
@@ -124,6 +160,41 @@ internal static class Walkthroughs
                 """
                 var a = 1;
                 var b = 2;
+
+                """),
+            ["11 C# from a Razor @code block"] = (
+                """
+                class Counter
+                {
+                    // current value
+                    private int count; // starts at zero
+
+                    private void Up() => count++; /* bump */
+                }
+
+                """,
+                """
+                class Counter
+                {
+                    private int count;
+
+                    private void Up() => count++;
+                }
+
+                """),
+            ["12 C# from a Razor code block"] = (
+                """
+                void Render()
+                {
+                    var total = 3; // three
+                }
+
+                """,
+                """
+                void Render()
+                {
+                    var total = 3;
+                }
 
                 """),
         };
